@@ -125,8 +125,7 @@ bot.on('messageCreate', async (msg) => {
             userId = msg.author.id;
         } else {
             // take content between 'dont' and 'cook' as id
-            var temp = content;
-            temp = content.replace(/^don(')?t let /i, "");
+            var temp = content.replace(/^don(')?t let /i, "");
             temp = temp.replace(/ cook$/i, "");
             userId = temp;
         }
