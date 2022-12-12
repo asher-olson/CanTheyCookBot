@@ -54,12 +54,24 @@ const dontLetMeCookRegex = /^don(')?t let me cook$/i;
 const dontLetCookRegex = /^don(')?t let\b.*\bcook$/i;
 const whoCanCookRegex = /^who (may|can) cook\?$/i;
 const whoCantCookRegex = /^who (can(')?t|may not|cannot) cook\?$/i;
+const LETHIMCOOKREGEX = /^LET (HIM|HER|THEM) COOK$/;
 
 bot.on('messageCreate', async (msg) => {
     const content = msg.content;
 
+    if(LETHIMCOOKREGEX.test(content)) {
+        msg.channel.messages.fetch({ limit: 2 }).then(async messages => {
+            const lastUser = messages.last().author.id;
+
+            await setIfUserCanCook(lastUser, msg.guildId, true, true);
+    
+            msg.channel.send(`<@${lastUser}>, I COMMAND YOU TO COOK`);
+        })
+        .catch(console.error);
+    }
+
     // let ___ cook
-    if(letCookRegex.test(content)) {
+    else if(letCookRegex.test(content)) {
         const mentioned = msg.mentions?.users?.first();
         var userId = "";
         var self = false;
