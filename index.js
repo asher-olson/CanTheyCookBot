@@ -24,41 +24,59 @@ async function checkIfUserCanCook(userId, guildId) {
     return chef?.canCook;
 }
 
-async function setIfUserCanCook(userId, guildId, canCook) {
+async function setIfUserCanCook(userId, guildId, canCook, isDiscordUserIdString=false) {
     const collection = client.db("chefs").collection("chefs");
 
     let doc = await collection.findOne({userId: userId, guildId: guildId});
 
     if(!doc) {
-        await collection.insertOne({userId: userId, guildId: guildId, canCook: canCook});
+        await collection.insertOne({userId: userId, guildId: guildId, canCook: canCook, isDiscordUserIdString: isDiscordUserIdString});
     } else {
         await collection.updateOne({userId: userId, guildId: guildId}, {$set:{canCook: canCook}});
     }
 }
 
+async function getAllChefsByGuild(guildId, canCook) {
+    const collection = client.db("chefs").collection("chefs");
+
+    let docs = await collection.find({guildId: guildId, canCook: canCook}).toArray();
+
+    return docs;
+}
+
 const bot = new Discord.Client({ intents: ["GUILDS", "GUILD_MESSAGES"] });
+
+const letMeCookRegex = /^let me cook$/i;
+const letCookRegex = /^let\b.*\bcook$/i;
+const mayICookRegex = /^(may|can) I cook\?$/i;
+const mayCookRegex = /^(may|can)\b.*\bcook\?$/i;
+const dontLetMeCookRegex = /^don(')?t let me cook$/i;
+const dontLetCookRegex = /^don(')?t let\b.*\bcook$/i;
+const whoCanCookRegex = /^who (may|can) cook\?$/i;
+const whoCantCookRegex = /^who (can(')?t|may not|cannot) cook\?$/i;
 
 bot.on('messageCreate', async (msg) => {
     const content = msg.content;
 
     // let ___ cook
-    const letMeCookRegex = /^let me cook$/i;
-    const letCookRegex = /^let\b.*\bcook$/i;
     if(letCookRegex.test(content)) {
         const mentioned = msg.mentions?.users?.first();
         var userId = "";
         var self = false;
+        var at = false;
         if(mentioned) {
             userId = mentioned.id;
+            at = true;
         } else if(letMeCookRegex.test(content)) {
             self = true;
             userId = msg.author.id;
+            at = true;
         } else {
             // take content between 'let' and 'cook' as id
             userId = content.slice(4, -5);
         }
 
-        await setIfUserCanCook(userId, msg.guildId, true);
+        await setIfUserCanCook(userId, msg.guildId, true, at);
 
         if(mentioned) {
             msg.channel.send(`<@${userId}>, you may now cook.`);
@@ -71,9 +89,7 @@ bot.on('messageCreate', async (msg) => {
     }
 
     // may ___ cook
-    const mayICookRegex = /^may I cook\?$/i;
-    const mayCookRegex = /^may\b.*\bcook\?$/i;
-    if(mayCookRegex.test(content)) {
+    else if(mayCookRegex.test(content)) {
         const mentioned = msg.mentions?.users?.first();
         var userId = "";
         var self = false;
@@ -112,17 +128,18 @@ bot.on('messageCreate', async (msg) => {
     }
 
     // don't let ___ cook
-    const dontLetMeCookRegex = /^don(')?t let me cook$/i;
-    const dontLetCookRegex = /^don(')?t let\b.*\bcook$/i;
-    if(dontLetCookRegex.test(content)) {
+    else if(dontLetCookRegex.test(content)) {
         const mentioned = msg.mentions?.users?.first();
         var userId = "";
         var self = false;
+        var at = false;
         if(mentioned) {
             userId = mentioned.id;
+            at = true;
         } else if(dontLetMeCookRegex.test(content)) {
             self = true;
             userId = msg.author.id;
+            at = true;
         } else {
             // take content between 'dont' and 'cook' as id
             var temp = content.replace(/^don(')?t let /i, "");
@@ -130,7 +147,7 @@ bot.on('messageCreate', async (msg) => {
             userId = temp;
         }
 
-        await setIfUserCanCook(userId, msg.guildId, false);
+        await setIfUserCanCook(userId, msg.guildId, false, at);
 
         if(mentioned) {
             msg.channel.send(`<@${userId}>, you are forbidden from cooking.`);
@@ -140,6 +157,34 @@ bot.on('messageCreate', async (msg) => {
         } else {
             msg.channel.send(`${userId} may not cook under any circumstance.`);
         }
+    }
+
+    // list all chefs
+    else if(whoCanCookRegex.test(content)) {
+        const chefs = await getAllChefsByGuild(msg.guildId, true);
+        var joined = "";
+        chefs.forEach((doc) => {
+            if(doc.isDiscordUserIdString) {
+                joined = `${joined}<@${doc.userId}>\n`;
+            } else {
+                joined = `${joined}${doc.userId}\n`;
+            }
+        });
+        msg.channel.send(`👍 Those who are authorized to cook 👍\n\n${joined}`);
+    }
+
+    // list all non cookers
+    else if(whoCantCookRegex.test(content)) {
+        const chefs = await getAllChefsByGuild(msg.guildId, false);
+        var joined = "";
+        chefs.forEach((doc) => {
+            if(doc.isDiscordUserIdString) {
+                joined = `${joined}<@${doc.userId}>\n`;
+            } else {
+                joined = `${joined}${doc.userId}\n`;
+            }
+        });
+        msg.channel.send(`❌ Those who must be prevented from cooking by any means ❌\n\n${joined}`);
     }
 });
 
